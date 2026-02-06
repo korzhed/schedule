@@ -1,40 +1,70 @@
-// AddMedicationSheet.swift
-// Created to fix missing view error in ScheduleStepView
-
 import SwiftUI
-
+    //тест
 struct AddMedicationSheet: View {
+
     let slotIndex: Int
-    let availableMedications: [MedicationItem]
-    let onAdd: (UUID) -> Void
+    let parsedMedications: [MedicationItem]   // остаются в сигнатуре, чтобы не ломать вызовы
+    let slotMedications: [Int: Set<UUID>]     // тоже оставляем для совместимости
+
+    let onAddFromList: (UUID) -> Void        // не используется, но оставляем
+    let onAddManual: (MedicationItem) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var name: String = ""
+    @State private var dosage: String = ""
+    @State private var comment: String = ""
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !dosage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
-            List(availableMedications) { medication in
-                Button {
-                    onAdd(medication.id)
-                    dismiss()
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(medication.name)
-                            .font(.headline)
-                        Text(medication.dosage)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        if let comment = medication.comment, !comment.isEmpty {
-                            Text(comment)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 4)
+            Form {
+                Section("Новое лекарство") {
+                    TextField("Название лекарства", text: $name)
+                    TextField("Дозировка", text: $dosage)
+                    TextField("Комментарий (по желанию)", text: $comment)
                 }
             }
             .navigationTitle("Добавить лекарство")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Сохранить") {
+                        save()
+                    }
+                    .disabled(!canSave)
+                }
+            }
         }
+    }
+
+    private func save() {
+        guard canSave else { return }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDosage = dosage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let item = MedicationItem(
+            id: UUID(),
+            name: trimmedName,
+            dosage: trimmedDosage,
+            timesPerDay: 1,
+            durationInDays: 7,
+            comment: trimmedComment.isEmpty ? nil : trimmedComment
+        )
+
+        onAddManual(item)
+        dismiss()
     }
 }
 
@@ -43,12 +73,12 @@ struct AddMedicationSheet_Previews: PreviewProvider {
     static var previews: some View {
         AddMedicationSheet(
             slotIndex: 1,
-            availableMedications: [
-                MedicationItem(id: UUID(), name: "Пример 1", dosage: "10 мг", timesPerDay: 1, durationInDays: 5, comment: "Пить после еды"),
-                MedicationItem(id: UUID(), name: "Пример 2", dosage: "20 мг", timesPerDay: 2, durationInDays: 7, comment: nil)
-            ],
-            onAdd: { _ in }
+            parsedMedications: [],
+            slotMedications: [:],
+            onAddFromList: { _ in },
+            onAddManual: { _ in }
         )
     }
 }
 #endif
+

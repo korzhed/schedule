@@ -1,12 +1,12 @@
 import SwiftUI
 
-struct IntakeItem: Identifiable {
+struct TodayIntakeItem: Identifiable {
     let id = UUID()
     let name: String
 }
 
-struct IntakeItemView: View {
-    let item: IntakeItem
+struct TodayIntakeItemView: View {
+    let item: TodayIntakeItem
     let isCompleted: Bool
     let onToggleCompleted: (Bool) -> Void
 
@@ -14,30 +14,35 @@ struct IntakeItemView: View {
         HStack {
             Text(item.name)
                 .strikethrough(isCompleted, color: .gray)
+
             Spacer()
+
             Button(action: { onToggleCompleted(!isCompleted) }) {
                 Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isCompleted ? .green : .gray)
                     .imageScale(.large)
             }
             .buttonStyle(.plain)
+            .opacity(isCompleted ? 0.5 : 1)
+            .padding()
         }
-        .opacity(isCompleted ? 0.5 : 1)
-        .padding()
     }
 }
 
-struct IntakeItemView_Previews: PreviewProvider {
+struct TodayIntakeItemView_Previews: PreviewProvider {
     static var previews: some View {
-        IntakeItemView(
-            item: IntakeItem(name: "Take vitamins"),
-            isCompleted: false,
-            onToggleCompleted: { _ in }
-        )
-        IntakeItemView(
-            item: IntakeItem(name: "Drink water"),
-            isCompleted: true,
-            onToggleCompleted: { _ in }
-        )
+        VStack {
+            TodayIntakeItemView(
+                item: TodayIntakeItem(name: "Take vitamins"),
+                isCompleted: false,
+                onToggleCompleted: { _ in }
+            )
+
+            TodayIntakeItemView(
+                item: TodayIntakeItem(name: "Drink water"),
+                isCompleted: true,
+                onToggleCompleted: { _ in }
+            )
+        }
     }
 }
