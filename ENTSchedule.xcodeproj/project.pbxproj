@@ -10,9 +10,22 @@
 		B1CC59B32F2C99FA00FEA79B /* ENTSchedule.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ENTSchedule.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B1B8DC812F34ED580003E774 /* Exceptions for "ENTSchedule" folder in "ENTSchedule" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B1CC59B22F2C99FA00FEA79B /* ENTSchedule */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B1CC59B52F2C99FA00FEA79B /* ENTSchedule */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B1B8DC812F34ED580003E774 /* Exceptions for "ENTSchedule" folder in "ENTSchedule" target */,
+			);
 			path = ENTSchedule;
 			sourceTree = "<group>";
 		};
@@ -256,6 +269,9 @@
 				DEVELOPMENT_TEAM = 33BVCJ3WAV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ENTSchedule/Info.plist;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Приложению нужен доступ к микрофону, чтобы записывать ваш голос и переводить его в текст";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Если хотите, вводить назначения голосом. Дайте доступ к распознаванию речи";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +304,9 @@
 				DEVELOPMENT_TEAM = 33BVCJ3WAV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ENTSchedule/Info.plist;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Приложению нужен доступ к микрофону, чтобы записывать ваш голос и переводить его в текст";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Если хотите, вводить назначения голосом. Дайте доступ к распознаванию речи";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
