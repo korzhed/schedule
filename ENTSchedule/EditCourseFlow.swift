@@ -35,95 +35,73 @@ struct EditCourseFlow: View {
         _medications = State(initialValue: course.medications)
         _totalDurationInDays = State(initialValue: course.totalDurationInDays)
     }
+    
+    private var currentDoseSlots: [DoseSlot] {
+        let maxSlots = medications.map { $0.timesPerDay }.max() ?? 0
+        return (1...maxSlots).map { i in
+            if let original = course.doseSlots.first(where: { $0.indexInDay == i }) {
+                return original
+            } else {
+                // Создаём новый слот с дефолтным временем (например, 9:00/10:00/...) и нужным номером
+                let hour = 9 + (i - 1)
+                let comps = DateComponents(hour: hour, minute: 0)
+                return DoseSlot(id: UUID(), indexInDay: i, time: comps)
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Название курса") {
-                    TextField("Например: Курс от ЛОРа", text: $courseName)
+                
+                // ЛЕКАРСТВА
+                Section("Лекарства") {
+                    ForEach($medications) { $med in
+                        TextField("Название", text: $med.name)
+                        TextField("Дозировка", text: $med.dosage)
+                        Stepper(value: $med.timesPerDay, in: 1...8) {
+                            Text("Приёмов в день: \(med.timesPerDay)")
+                        }
+                        .onChange(of: med.timesPerDay) { newValue, oldValue in
+                            // Если количество слотов уменьшилось, убираем "висячие" slotTimes/slotMedications
+                            if newValue < oldValue {
+                                let maxSlot = medications.map { $0.timesPerDay }.max() ?? 0
+                                slotTimes = slotTimes.filter { $0.key <= maxSlot }
+                                slotMedications = slotMedications.filter { $0.key <= maxSlot }
+                            }
+                        }
+                        Stepper(value: $med.durationInDays, in: 1...365) {
+                            Text("Длительность: \(med.durationInDays) дней")
+                        }
+                        TextField("Комментарий", text: Binding(
+                            get: { med.comment ?? "" },
+                            set: { med.comment = $0.isEmpty ? nil : $0 }
+                        ))
+                    }
                 }
 
-                Section("Дата начала") {
+
+
+
+                // ИНФОРМАЦИЯ
+                Section("Информация") {
+                    TextField("Название курса", text: $courseName)
+                    
+                    HStack {
+                        Text("Приёмов в день")
+                        Spacer()
+                        Text("\(course.doseSlots.count)")
+                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                    }
+
                     DatePicker(
-                        "Начало курса",
+                        "Дата начала",
                         selection: $startDate,
                         displayedComponents: [.date]
                     )
-                }
 
-                Section("Длительность курса") {
-                    Stepper(
-                        value: $totalDurationInDays,
-                        in: 1...180
-                    ) {
-                        let weeks = Double(totalDurationInDays) / 7.0
-                        if totalDurationInDays % 7 == 0 {
-                            Text("\(totalDurationInDays) дней (\(Int(weeks)) нед.)")
-                        } else {
-                            Text("\(totalDurationInDays) дней (~\(String(format: "%.1f", weeks)) нед.)")
-                        }
-                    }
-                }
-
-                ForEach(course.doseSlots.sorted(by: { $0.indexInDay < $1.indexInDay })) { slot in
-                    Section {
-                        HStack {
-                            Text("Время приёма")
-                            Spacer()
-                            DatePicker(
-                                "",
-                                selection: Binding(
-                                    get: {
-                                        slotTimes[slot.indexInDay] ?? timeFromComponents(slot.time)
-                                    },
-                                    set: { slotTimes[slot.indexInDay] = $0 }
-                                ),
-                                displayedComponents: .hourAndMinute
-                            )
-                            .labelsHidden()
-                        }
-
-                        let meds = getMedications(for: slot.indexInDay)
-                        if meds.isEmpty {
-                            Text("Нет лекарств в этом приёме")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(meds) { med in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(med.name)
-                                            .font(.body)
-                                        Text(med.dosage)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    Button(role: .destructive) {
-                                        removeMedication(med.id, from: slot.indexInDay)
-                                    } label: {
-                                        Image(systemName: "minus.circle.fill")
-                                            .foregroundStyle(.red)
-                                    }
-                                }
-                            }
-                        }
-
-                        Button {
-                            selectedSlotForAdding = slot.indexInDay
-                            showAddMedication = true
-                        } label: {
-                            Label("Добавить лекарство", systemImage: "plus.circle")
-                        }
-                    } header: {
-                        Text("Приём \(slot.indexInDay)")
-                    }
-                }
-
-                Section("Напоминания") {
-                    Toggle("Включить напоминания", isOn: $remindersEnabled)
+                    Toggle("Напоминания", isOn: $remindersEnabled)
 
                     if remindersEnabled {
                         Picker("За сколько минут до приёма", selection: $reminderOffsetMinutes) {
@@ -134,7 +112,69 @@ struct EditCourseFlow: View {
                         }
                     }
                 }
+
+                // РАСПИСАНИЕ ПРИЁМОВ
+                Section("Расписание приёмов") {
+                    ForEach(currentDoseSlots, id: \.indexInDay) { slot in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Приём \(slot.indexInDay)")
+                                    .font(.headline)
+                                Spacer()
+                                DatePicker(
+                                    "",
+                                    selection: Binding(
+                                        get: {
+                                            slotTimes[slot.indexInDay] ?? timeFromComponents(slot.time)
+                                        },
+                                        set: { slotTimes[slot.indexInDay] = $0 }
+                                    ),
+                                    displayedComponents: .hourAndMinute
+                                )
+                                .labelsHidden()
+                            }
+
+                            let meds = getMedications(for: slot.indexInDay)
+                            if meds.isEmpty {
+                                Text("Нет лекарств в этом приёме")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(meds) { med in
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(med.name)
+                                                .font(.body)
+                                            Text(med.dosage)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Button(role: .destructive) {
+                                            removeMedication(med.id, from: slot.indexInDay)
+                                        } label: {
+                                            Image(systemName: "minus.circle.fill")
+                                                .foregroundStyle(.red)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Button {
+                                selectedSlotForAdding = slot.indexInDay
+                                showAddMedication = true
+                            } label: {
+                                Label("Добавить лекарство", systemImage: "plus.circle")
+                            }
+                            .font(.subheadline)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
             }
+
             .navigationTitle("Редактирование курса")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -179,12 +219,7 @@ struct EditCourseFlow: View {
     }
 
     private func getMedications(for slotIndex: Int) -> [MedicationItem] {
-        let selectedIds = slotMedications[slotIndex] ?? Set(
-            course.courseMedications
-                .filter { $0.slotIndexes.contains(slotIndex) }
-                .map { $0.medicationId }
-        )
-        return medications.filter { selectedIds.contains($0.id) }
+        return medications.filter { $0.timesPerDay >= slotIndex }
     }
 
     private func removeMedication(_ medicationId: UUID, from slotIndex: Int) {
@@ -199,12 +234,28 @@ struct EditCourseFlow: View {
 
     private func saveChanges() -> Course {
         var updated = course
+        updated.medications = medications
         updated.startDate = startDate
         updated.name = courseName.isEmpty ? nil : courseName
-        updated.totalDurationInDays = totalDurationInDays
         updated.remindersEnabled = remindersEnabled
         updated.reminderOffsetMinutes = reminderOffsetMinutes
-        // TODO: при необходимости добавить сохранение изменений расписания и лекарств
+        let maxDuration = medications.map(\.durationInDays).max() ?? 0
+        updated.totalDurationInDays = maxDuration
+        // Сохраняем актуальный список слотов (приёмов в день)
+        let newSlots = (1...(medications.map { $0.timesPerDay }.max() ?? 0)).map { i -> DoseSlot in
+            if let t = slotTimes[i] {
+                // Используем пользовательское время, если оно есть
+                return DoseSlot(id: UUID(), indexInDay: i, time: Calendar.current.dateComponents([.hour, .minute], from: t))
+            } else if let original = course.doseSlots.first(where: { $0.indexInDay == i }) {
+                return original
+            } else {
+                // По умолчанию 9:00, 10:00, ...
+                let hour = 9 + (i - 1)
+                let comps = DateComponents(hour: hour, minute: 0)
+                return DoseSlot(id: UUID(), indexInDay: i, time: comps)
+            }
+        }
+        updated.doseSlots = newSlots
         return updated
     }
 }
@@ -255,3 +306,4 @@ struct MedicationPickerView: View {
         }
     }
 }
+

@@ -263,6 +263,15 @@ private struct InfoSection: View {
             }
 
             HStack {
+                Text("Приёмов в день")
+                Spacer()
+                Text("\(course.doseSlots.count)")
+                    .foregroundStyle(.secondary)
+            }
+
+
+
+            HStack {
                 Text("Напоминания")
                 Spacer()
                 Text(course.remindersEnabled ? "Включены" : "Выключены")
