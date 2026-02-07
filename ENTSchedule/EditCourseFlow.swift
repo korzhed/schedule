@@ -5,7 +5,7 @@ struct EditCourseFlow: View {
     @Environment(\.dismiss) private var dismiss
 
     let course: Course
-    let onComplete: () -> Void
+    let onComplete: (Course) -> Void
 
     @State private var courseName: String
     @State private var startDate: Date
@@ -21,7 +21,7 @@ struct EditCourseFlow: View {
     @State private var selectedSlotForAdding: Int? = nil
     @State private var showAddFromText: Bool = false
 
-    init(course: Course, onComplete: @escaping () -> Void) {
+    init(course: Course, onComplete: @escaping (Course) -> Void) {
         self.course = course
         self.onComplete = onComplete
 
@@ -145,8 +145,8 @@ struct EditCourseFlow: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Готово") {
-                        saveChanges()
-                        onComplete()
+                        let updated = saveChanges()
+                        onComplete(updated)
                         dismiss()
                     }
                 }
@@ -197,9 +197,15 @@ struct EditCourseFlow: View {
         slotMedications[slotIndex] = set
     }
 
-    private func saveChanges() {
-        // TODO: применить изменения к appState / course
-        // Сейчас оставляем как есть, чтобы не менять бизнес-логику без обсуждения
+    private func saveChanges() -> Course {
+        var updated = course
+        updated.startDate = startDate
+        updated.name = courseName.isEmpty ? nil : courseName
+        updated.totalDurationInDays = totalDurationInDays
+        updated.remindersEnabled = remindersEnabled
+        updated.reminderOffsetMinutes = reminderOffsetMinutes
+        // TODO: при необходимости добавить сохранение изменений расписания и лекарств
+        return updated
     }
 }
 

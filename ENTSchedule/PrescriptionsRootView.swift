@@ -68,7 +68,7 @@ struct PrescriptionsRootView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .navigationDestination(for: Course.self) { course in
-                CourseDetailView(course: course)
+                CourseDetailView(courseId: course.id)
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {

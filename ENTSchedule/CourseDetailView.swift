@@ -5,10 +5,10 @@ struct CourseDetailView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showEditSheet: Bool = false
 
-    let course: Course
+    let courseId: UUID
 
-    private var todayProgress: Double {
-        appState.getTodayProgress(for: course)
+    private var course: Course {
+        appState.courses.first(where: { $0.id == courseId }) ?? appState.courses.first(where: { _ in false }) ?? Course(id: courseId, createdAt: Date(), startDate: Date(), name: nil, medications: [], doseSlots: [], courseMedications: [], remindersEnabled: false, reminderOffsetMinutes: 0, totalDurationInDays: 0)
     }
 
     var body: some View {
@@ -32,11 +32,13 @@ struct CourseDetailView: View {
             }
         }
         .sheet(isPresented: $showEditSheet) {
-            EditCourseFlow(course: course) {
+            EditCourseFlow(course: course) { updatedCourse in
+                appState.updateCourse(updatedCourse)
                 showEditSheet = false
             }
             .environmentObject(appState)
         }
+
     }
 }
 
