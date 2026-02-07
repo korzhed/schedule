@@ -22,7 +22,7 @@ struct TodayView: View {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let day = calendar.startOfDay(for: date)
-        return day <= today
+        return day == today
     }
 
     var body: some View {
@@ -133,20 +133,9 @@ private struct TodayIntakeCard: View {
         }
     }
 
-    /// Можно ли уже показывать контрол (когда время приёма наступило или прошло)
+    /// Можно ли уже показывать контрол статуса для этого слота
     private func canShowStatusIcon(now: Date = Date()) -> Bool {
-        let calendar = Calendar.current
-        var components = item.time
-        components.calendar = calendar
-
-        let slotDate = calendar.date(
-            bySettingHour: components.hour ?? 0,
-            minute: components.minute ?? 0,
-            second: 0,
-            of: date
-        ) ?? date
-
-        return slotDate <= now
+        true
     }
 
     var body: some View {

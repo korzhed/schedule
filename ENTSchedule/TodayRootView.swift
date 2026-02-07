@@ -152,8 +152,8 @@ struct TodayRootView: View {
     private func buildIntakes(for date: Date) -> [IntakeItem] {
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: date)
-        let today = calendar.startOfDay(for: Date())
-        let now = Date()
+    //,,let today = calendar.startOfDay(for: Date())
+        //let now = Date()
 
         var items: [IntakeItem] = []
 
@@ -171,20 +171,6 @@ struct TodayRootView: View {
             guard courseStart <= day, day < courseEnd else { continue }
 
             for slot in course.doseSlots {
-                // фильтр по времени только для "сегодня"
-                if day == today,
-                   let hour = slot.time.hour,
-                   let minute = slot.time.minute {
-                    let slotDate = calendar.date(
-                        bySettingHour: hour,
-                        minute: minute,
-                        second: 0,
-                        of: day
-                    ) ?? day
-
-                    guard slotDate >= now else { continue }
-                }
-
                 let medicationIds = course.courseMedications
                     .filter { $0.slotIndexes.contains(slot.indexInDay) }
                     .map { $0.medicationId }
