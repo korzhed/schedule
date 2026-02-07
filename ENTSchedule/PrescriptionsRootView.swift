@@ -49,7 +49,7 @@ struct PrescriptionsRootView: View {
                         ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
 
-                                LazyVStack(spacing: 0) {
+                                LazyVStack(spacing: 12) {
                                     ForEach(appState.courses.sorted(by: { $0.createdAt > $1.createdAt })) { course in
                                         NavigationLink(value: course) {
                                             CourseRowView(course: course)
@@ -121,39 +121,52 @@ struct CourseRowView: View {
 
     var body: some View {
 
-        VStack(alignment: .leading, spacing: 12) {
+        HStack(spacing: 12) {
 
-            // Название препаратов
-            Text(course.medications.map { $0.name }.joined(separator: ", "))
-                .font(.headline)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            // Левая часть: текстовый контент
+            VStack(alignment: .leading, spacing: 12) {
 
-            // Кол‑во лекарств и приёмов в день
-            HStack(spacing: 12) {
-                Label("\(course.medications.count) лекарств", systemImage: "pills.fill")
-                Label("\(course.doseSlots.count) приёмов/день", systemImage: "clock.fill")
+                // Название препаратов
+                Text(course.medications.map { $0.name }.joined(separator: ", "))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                // Кол‑во лекарств и приёмов в день
+                HStack(spacing: 12) {
+                    Label("\(course.medications.count) лекарств", systemImage: "pills.fill")
+                    Label("\(course.doseSlots.count) приёмов/день", systemImage: "clock.fill")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                // Дата начала
+                HStack {
+                    Text("Начало: \(course.startDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
 
-            // Дата начала + процент
-            HStack {
-                Text("Начало: \(course.startDate.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(progressPercentText)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
+            // Правая часть: вертикальный индикатор прогресса
+            ZStack {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color(.systemGray5))
 
-            // Нормальный индикатор прогресса
-            VStack(alignment: .leading, spacing: 4) {
-                ProgressView(value: overallProgress)
-                    .tint(.blue)
+                GeometryReader { geo in
+                    let height = max(4, geo.size.height * overallProgress)
+
+                    VStack {
+                        Spacer()
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(Color.blue)
+                            .frame(height: height)
+                    }
+                }
             }
+            .frame(width: 8)
         }
         .padding(14)
         .background(

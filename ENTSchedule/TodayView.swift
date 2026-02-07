@@ -139,19 +139,14 @@ private struct TodayIntakeCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // верхняя строка: время и курс
+        VStack(alignment: .leading, spacing: 6) {
+            // верхняя строка: время
             HStack(alignment: .firstTextBaseline) {
                 Text(timeString)
-                    .font(.title3.weight(.semibold))
+                    .font(.headline)
                     .foregroundColor(.primary)
 
                 Spacer()
-
-                Text(item.courseName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
 
             // лекарства
@@ -160,7 +155,7 @@ private struct TodayIntakeCard: View {
                 let showIcon = canShowStatusIcon()
 
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .center, spacing: 10) {
+                    HStack(alignment: .bottom, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(med.name)
                                 .font(.body)
@@ -234,7 +229,9 @@ private struct TodayIntakeCard: View {
                 }
             }
         }
-        .padding(16)
+        .padding(.leading, 20)   // левый
+        .padding(.trailing, 16)  // правый
+        .padding(.vertical, 16)  // верх+низ
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
