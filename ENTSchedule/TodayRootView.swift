@@ -210,22 +210,37 @@ struct TodayRootView: View {
         private let calendar = Calendar.current
 
         var body: some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(days, id: \.self) { day in
-                        DayCircleView(
-                            date: day,
-                            isSelected: calendar.isDate(day, inSameDayAs: selectedDate),
-                            hasIntakes: hasIntakesForDay(day),
-                            status: dayStatus(day)
-                        )
-                        .onTapGesture {
-                            selectedDate = day
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(days, id: \.self) { day in
+                            DayCircleView(
+                                date: day,
+                                isSelected: calendar.isDate(day, inSameDayAs: selectedDate),
+                                hasIntakes: hasIntakesForDay(day),
+                                status: dayStatus(day)
+                            )
+                            .id(day)
+                            .onTapGesture {
+                                withAnimation(.easeInOut) {
+                                    selectedDate = day
+                                }
+                            }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+                .onAppear {
+                    let today = Calendar.current.startOfDay(for: selectedDate)
+                    proxy.scrollTo(today, anchor: .center)
+                }
+                .onChange(of: selectedDate) {
+                    let day = Calendar.current.startOfDay(for: selectedDate)
+                    withAnimation(.easeInOut) {
+                        proxy.scrollTo(day, anchor: .center)
+                    }
+                }
             }
         }
     }
@@ -254,10 +269,6 @@ struct TodayRootView: View {
 
         // цвет фона кружка
         private var backgroundColor: Color {
-            if isSelected {
-                return Color.accentColor
-            }
-
             switch status {
             case .completed:
                 return Color.green.opacity(0.2)
@@ -271,6 +282,17 @@ struct TodayRootView: View {
                 return Color(.systemBackground)
             }
         }
+
+        private var borderColor: Color {
+            if isSelected {
+                return .accentColor
+            } else if hasIntakes {
+                return .clear
+            } else {
+                return Color(.systemGray4)
+            }
+        }
+
 
         // цвет нижней точки
         private var dotColor: Color {
@@ -318,6 +340,7 @@ struct TodayRootView: View {
                             .offset(y: 4)
                     }
                 }
+
             }
         }
     }
@@ -365,4 +388,3 @@ struct TodayRootView: View {
         }
     }
 }
-

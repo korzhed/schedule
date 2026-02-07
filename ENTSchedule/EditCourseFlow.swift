@@ -13,9 +13,10 @@ struct EditCourseFlow: View {
     @State private var reminderOffsetMinutes: Int
     @State private var totalDurationInDays: Int
 
-    @State private var slotTimes: [Int: Date] = [:]
-    @State private var slotMedications: [Int: Set<UUID>] = [:]
     @State private var medications: [MedicationItem]
+    @State private var courseMedicationsState: [CourseMedication]
+
+    @State private var slotTimes: [Int: Date] = [:]
 
     @State private var showAddMedication: Bool = false
     @State private var selectedSlotForAdding: Int? = nil
@@ -34,16 +35,22 @@ struct EditCourseFlow: View {
         )
         _medications = State(initialValue: course.medications)
         _totalDurationInDays = State(initialValue: course.totalDurationInDays)
+        _courseMedicationsState = State(initialValue: course.courseMedications)
     }
-    
+
+    // Все потенциальные слоты: берём максимум из уже существующих и требуемых по timesPerDay
     private var currentDoseSlots: [DoseSlot] {
-        let maxSlots = medications.map { $0.timesPerDay }.max() ?? 0
+        let existingMax = course.doseSlots.map { $0.indexInDay }.max() ?? 0
+        let desiredMax = medications.map { $0.timesPerDay }.max() ?? 0
+        let maxSlots = max(existingMax, desiredMax)
+
         return (1...maxSlots).map { i in
             if let original = course.doseSlots.first(where: { $0.indexInDay == i }) {
                 return original
             } else {
-                // Создаём новый слот с дефолтным временем (например, 9:00/10:00/...) и нужным номером
-                let hour = 9 + (i - 1)
+                // Новый слот с дефолтным временем по 3 часа, начиная с 9:00
+                let baseHour = 9
+                let hour = baseHour + (i - 1) * 3
                 let comps = DateComponents(hour: hour, minute: 0)
                 return DoseSlot(id: UUID(), indexInDay: i, time: comps)
             }
@@ -53,7 +60,7 @@ struct EditCourseFlow: View {
     var body: some View {
         NavigationStack {
             Form {
-                
+
                 // ЛЕКАРСТВА
                 Section("Лекарства") {
                     ForEach($medications) { $med in
@@ -63,12 +70,11 @@ struct EditCourseFlow: View {
                             Text("Приёмов в день: \(med.timesPerDay)")
                         }
                         .onChange(of: med.timesPerDay) { newValue, oldValue in
-                            // Если количество слотов уменьшилось, убираем "висячие" slotTimes/slotMedications
-                            if newValue < oldValue {
-                                let maxSlot = medications.map { $0.timesPerDay }.max() ?? 0
-                                slotTimes = slotTimes.filter { $0.key <= maxSlot }
-                                slotMedications = slotMedications.filter { $0.key <= maxSlot }
-                            }
+                            adjustSlotsForMedication(
+                                medicationId: med.id,
+                                newTimesPerDay: newValue,
+                                oldTimesPerDay: oldValue
+                            )
                         }
                         Stepper(value: $med.durationInDays, in: 1...365) {
                             Text("Длительность: \(med.durationInDays) дней")
@@ -80,17 +86,14 @@ struct EditCourseFlow: View {
                     }
                 }
 
-
-
-
                 // ИНФОРМАЦИЯ
                 Section("Информация") {
                     TextField("Название курса", text: $courseName)
-                    
+
                     HStack {
                         Text("Приёмов в день")
                         Spacer()
-                        Text("\(course.doseSlots.count)")
+                        Text("\(currentDoseSlots.count)")
                             .foregroundStyle(.secondary)
                             .font(.subheadline)
                     }
@@ -196,8 +199,15 @@ struct EditCourseFlow: View {
                     MedicationPickerView(
                         allMedications: $medications,
                         selectedMedicationIds: Binding(
-                            get: { slotMedications[slotIndex] ?? [] },
-                            set: { slotMedications[slotIndex] = $0 }
+                            get: {
+                                let ids = courseMedicationsState
+                                    .filter { $0.slotIndexes.contains(slotIndex) }
+                                    .map { $0.medicationId }
+                                return Set(ids)
+                            },
+                            set: { newValue in
+                                applySelection(newValue, forSlot: slotIndex)
+                            }
                         ),
                         onClose: { showAddMedication = false }
                     )
@@ -219,17 +229,160 @@ struct EditCourseFlow: View {
     }
 
     private func getMedications(for slotIndex: Int) -> [MedicationItem] {
-        return medications.filter { $0.timesPerDay >= slotIndex }
+        let medIds = courseMedicationsState
+            .filter { $0.slotIndexes.contains(slotIndex) }
+            .map { $0.medicationId }
+
+        return medications.filter { medIds.contains($0.id) }
     }
 
     private func removeMedication(_ medicationId: UUID, from slotIndex: Int) {
-        var set = slotMedications[slotIndex] ?? Set(
-            course.courseMedications
+        guard let idx = courseMedicationsState.firstIndex(where: { $0.medicationId == medicationId }) else {
+            return
+        }
+        var cm = courseMedicationsState[idx]
+        cm.slotIndexes.removeAll { $0 == slotIndex }
+        courseMedicationsState[idx] = cm
+    }
+
+    // Применяем выбор из пикера к courseMedicationsState
+    private func applySelection(_ newIds: Set<UUID>, forSlot slotIndex: Int) {
+        let existingIds = Set(
+            courseMedicationsState
                 .filter { $0.slotIndexes.contains(slotIndex) }
                 .map { $0.medicationId }
         )
-        set.remove(medicationId)
-        slotMedications[slotIndex] = set
+
+        let toAdd = newIds.subtracting(existingIds)
+        let toRemove = existingIds.subtracting(newIds)
+
+        // Добавляем
+        for id in toAdd {
+            if let idx = courseMedicationsState.firstIndex(where: { $0.medicationId == id }) {
+                var cm = courseMedicationsState[idx]
+                if !cm.slotIndexes.contains(slotIndex) {
+                    cm.slotIndexes.append(slotIndex)
+                    cm.slotIndexes.sort()
+                }
+                courseMedicationsState[idx] = cm
+            } else {
+                courseMedicationsState.append(
+                    CourseMedication(
+                        id: UUID(),
+                        medicationId: id,
+                        slotIndexes: [slotIndex]
+                    )
+                )
+            }
+        }
+
+        // Удаляем
+        for id in toRemove {
+            guard let idx = courseMedicationsState.firstIndex(where: { $0.medicationId == id }) else { continue }
+            var cm = courseMedicationsState[idx]
+            cm.slotIndexes.removeAll { $0 == slotIndex }
+            courseMedicationsState[idx] = cm
+        }
+    }
+
+    // Перераспределяем слоты для конкретного лекарства при изменении timesPerDay
+    private func adjustSlotsForMedication(
+        medicationId: UUID,
+        newTimesPerDay: Int,
+        oldTimesPerDay: Int
+    ) {
+        guard newTimesPerDay > 0 else { return }
+
+        let cmIndex = courseMedicationsState.firstIndex(where: { $0.medicationId == medicationId })
+        var cm = cmIndex.flatMap { courseMedicationsState[$0] }
+            ?? CourseMedication(id: UUID(), medicationId: medicationId, slotIndexes: [])
+
+        var currentIndexes = cm.slotIndexes.sorted()
+        let allSlots = currentDoseSlots.sorted { $0.indexInDay < $1.indexInDay }
+
+        if newTimesPerDay <= currentIndexes.count {
+            // Уменьшаем: оставляем самые ранние слоты
+            currentIndexes = Array(currentIndexes.prefix(newTimesPerDay))
+        } else {
+            // Увеличиваем: создаём недостающие приёмы с новыми слотами
+            let targets = generateEvenDatesForMedication(timesPerDay: newTimesPerDay)
+
+            // Уже используемые индексы для этого лекарства
+            var usedIndexes = Set(currentIndexes)
+
+            for target in targets {
+                if usedIndexes.count >= newTimesPerDay { break }
+
+                // Ищем свободный слот (без этого лекарства) с ближайшим временем
+                let candidate = allSlots
+                    .sorted { lhs, rhs in
+                        timeIntervalBetween(lhs.time, target) < timeIntervalBetween(rhs.time, target)
+                    }
+                    .first(where: { slot in
+                        !usedIndexes.contains(slot.indexInDay)
+                    })
+
+                if let candidate = candidate {
+                    usedIndexes.insert(candidate.indexInDay)
+                } else {
+                    // Если подходящих слотов нет — создаём новый индекс
+                    let newIndex = (allSlots.map { $0.indexInDay }.max() ?? 0) + 1
+                    usedIndexes.insert(newIndex)
+                }
+            }
+
+            currentIndexes = Array(usedIndexes).sorted()
+        }
+
+        cm.slotIndexes = currentIndexes
+
+        if let idx = cmIndex {
+            courseMedicationsState[idx] = cm
+        } else {
+            courseMedicationsState.append(cm)
+        }
+    }
+
+
+    // Равномерные целевые времена для лекарства между 8:00 и 20:00
+    private func generateEvenDatesForMedication(timesPerDay: Int) -> [Date] {
+        guard timesPerDay > 0 else { return [] }
+
+        let calendar = Calendar.current
+        let baseDate = startDate
+
+        var startComponents = calendar.dateComponents([.year, .month, .day], from: baseDate)
+        startComponents.hour = 8
+        startComponents.minute = 0
+
+        var endComponents = startComponents
+        endComponents.hour = 20
+        endComponents.minute = 0
+
+        let start = calendar.date(from: startComponents) ?? baseDate
+        let end = calendar.date(from: endComponents) ?? baseDate
+
+        let startTime = start.timeIntervalSince1970
+        let endTime = end.timeIntervalSince1970
+
+        if timesPerDay == 1 {
+            let mid = (startTime + endTime) / 2
+            return [Date(timeIntervalSince1970: mid)]
+        }
+
+        let step = (endTime - startTime) / Double(timesPerDay - 1)
+        return (0..<timesPerDay).map { i in
+            Date(timeIntervalSince1970: startTime + step * Double(i))
+        }
+    }
+
+    private func timeIntervalBetween(_ components: DateComponents, _ date: Date) -> TimeInterval {
+        let calendar = Calendar.current
+        var base = calendar.dateComponents([.year, .month, .day], from: date)
+        base.hour = components.hour ?? 0
+        base.minute = components.minute ?? 0
+        let componentsDate = calendar.date(from: base) ?? date
+        return abs(componentsDate.timeIntervalSince(date))
     }
 
     private func saveChanges() -> Course {
@@ -239,24 +392,76 @@ struct EditCourseFlow: View {
         updated.name = courseName.isEmpty ? nil : courseName
         updated.remindersEnabled = remindersEnabled
         updated.reminderOffsetMinutes = reminderOffsetMinutes
+
         let maxDuration = medications.map(\.durationInDays).max() ?? 0
         updated.totalDurationInDays = maxDuration
-        // Сохраняем актуальный список слотов (приёмов в день)
-        let newSlots = (1...(medications.map { $0.timesPerDay }.max() ?? 0)).map { i -> DoseSlot in
+
+        // Пересчитываем слоты по максимальному timesPerDay
+        let maxTimesPerDay = medications.map { $0.timesPerDay }.max() ?? 0
+        let newSlots = (1...maxTimesPerDay).map { i -> DoseSlot in
             if let t = slotTimes[i] {
-                // Используем пользовательское время, если оно есть
-                return DoseSlot(id: UUID(), indexInDay: i, time: Calendar.current.dateComponents([.hour, .minute], from: t))
+                return DoseSlot(
+                    id: UUID(),
+                    indexInDay: i,
+                    time: Calendar.current.dateComponents([.hour, .minute], from: t)
+                )
             } else if let original = course.doseSlots.first(where: { $0.indexInDay == i }) {
                 return original
             } else {
-                // По умолчанию 9:00, 10:00, ...
                 let hour = 9 + (i - 1)
                 let comps = DateComponents(hour: hour, minute: 0)
                 return DoseSlot(id: UUID(), indexInDay: i, time: comps)
             }
         }
         updated.doseSlots = newSlots
+
+        // Нормализуем courseMedications относительно новых слотов
+        let normalized = normalizedCourseMedications(for: updated, newSlots: newSlots)
+
+        // Удаляем слоты, в которых нет ни одного лекарства, и переиндексируем 1...N
+        let usedIndexes = Set(normalized.flatMap { $0.slotIndexes })
+        let filteredSlots = newSlots
+            .filter { usedIndexes.contains($0.indexInDay) }
+            .sorted { $0.indexInDay < $1.indexInDay }
+
+        let reindexedSlots: [DoseSlot] = filteredSlots.enumerated().map { offset, slot in
+            var s = slot
+            s.indexInDay = offset + 1
+            return s
+        }
+
+        let indexMapping: [Int: Int] = Dictionary(uniqueKeysWithValues:
+            zip(filteredSlots.map { $0.indexInDay }, reindexedSlots.map { $0.indexInDay })
+        )
+
+        // Перенекидываем индексы в courseMedications по новой нумерации
+        let remappedCourseMedications: [CourseMedication] = normalized.map { cm in
+            var copy = cm
+            copy.slotIndexes = cm.slotIndexes.compactMap { indexMapping[$0] }.sorted()
+            return copy
+        }
+
+        updated.doseSlots = reindexedSlots
+        updated.courseMedications = remappedCourseMedications
+
         return updated
+
+    }
+
+    private func normalizedCourseMedications(
+        for course: Course,
+        newSlots: [DoseSlot]
+    ) -> [CourseMedication] {
+        let validIndexes = Set(newSlots.map { $0.indexInDay })
+
+        var result = courseMedicationsState.map { cm -> CourseMedication in
+            var copy = cm
+            copy.slotIndexes = copy.slotIndexes.filter { validIndexes.contains($0) }
+            return copy
+        }
+
+        result.removeAll { $0.slotIndexes.isEmpty }
+        return result
     }
 }
 
@@ -306,4 +511,3 @@ struct MedicationPickerView: View {
         }
     }
 }
-
