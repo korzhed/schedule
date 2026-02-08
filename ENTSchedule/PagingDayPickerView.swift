@@ -46,11 +46,14 @@ struct PagingDayPickerView: UIViewRepresentable {
             self.parent = parent
         }
 
+        // MARK: - DataSource
+
         func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
             parent.days.count
         }
 
-        func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        func collectionView(_ collectionView: UICollectionView,
+                            cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
             let day = parent.days[indexPath.item]
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "DayCell", for: indexPath) as! DayCell
 
@@ -60,17 +63,23 @@ struct PagingDayPickerView: UIViewRepresentable {
             return cell
         }
 
+        // MARK: - Layout
+
         func collectionView(_ collectionView: UICollectionView,
                             layout collectionViewLayout: UICollectionViewLayout,
                             sizeForItemAt indexPath: IndexPath) -> CGSize {
-            return CGSize(width: 44, height: collectionView.bounds.height * 0.9)
+            CGSize(width: 44, height: collectionView.bounds.height * 0.9)
         }
+
+        // MARK: - Selection
 
         func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
             selectItem(at: indexPath, in: collectionView, animated: true)
         }
 
-        private func selectItem(at indexPath: IndexPath, in collectionView: UICollectionView, animated: Bool) {
+        private func selectItem(at indexPath: IndexPath,
+                                in collectionView: UICollectionView,
+                                animated: Bool) {
             let day = parent.days[indexPath.item]
             let normalized = calendar.startOfDay(for: day)
 
@@ -79,8 +88,19 @@ struct PagingDayPickerView: UIViewRepresentable {
             }
 
             collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
-            collectionView.reloadData()
+
+            // Обновляем только видимые ячейки
+            for cell in collectionView.visibleCells {
+                guard let ip = collectionView.indexPath(for: cell),
+                      let dayCell = cell as? DayCell else { continue }
+
+                let date = parent.days[ip.item]
+                let isSelected = calendar.isDate(date, inSameDayAs: parent.selectedDate)
+                dayCell.configure(date: date, isSelected: isSelected, calendar: calendar)
+            }
         }
+
+        // MARK: - Scrolling
 
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             if !decelerate {
@@ -90,6 +110,36 @@ struct PagingDayPickerView: UIViewRepresentable {
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             snapToNearestCell(scrollView)
+        }
+
+        // во время скролла обновляем только selectedDate (заголовок и контент),
+        // а не скролл и не подсветку вручную
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard let collectionView = scrollView as? UICollectionView else { return }
+
+            let center = collectionView.bounds.midX + collectionView.contentOffset.x
+
+            var minDistance = CGFloat.greatestFiniteMagnitude
+            var indexPathToSelect: IndexPath?
+
+            for cell in collectionView.visibleCells {
+                let cellCenter = cell.frame.midX
+                let distance = abs(cellCenter - center)
+                if distance < minDistance,
+                   let indexPath = collectionView.indexPath(for: cell) {
+                    minDistance = distance
+                    indexPathToSelect = indexPath
+                }
+            }
+
+            guard let indexPath = indexPathToSelect else { return }
+
+            let day = parent.days[indexPath.item]
+            let normalized = calendar.startOfDay(for: day)
+
+            if !calendar.isDate(normalized, inSameDayAs: parent.selectedDate) {
+                parent.selectedDate = normalized
+            }
         }
 
         private func snapToNearestCell(_ scrollView: UIScrollView) {
@@ -158,29 +208,20 @@ struct PagingDayPickerView: UIViewRepresentable {
             weekdayLabel.text = formatter.string(from: date)
             dayLabel.text = "\(calendar.component(.day, from: date))"
 
-            let isToday = calendar.isDateInToday(date)
-
             if isSelected {
-                // Стиль выбранного дня: белый фон, синий бордер и синий текст
-                contentView.backgroundColor = UIColor.systemBackground
+                contentView.backgroundColor = .systemBackground
                 contentView.layer.borderWidth = 1
                 contentView.layer.borderColor = UIColor.systemBlue.cgColor
                 weekdayLabel.textColor = .systemBlue
                 dayLabel.textColor = .systemBlue
             } else {
-                contentView.backgroundColor = UIColor.clear
+                contentView.backgroundColor = .clear
+                contentView.layer.borderWidth = 0
+                contentView.layer.borderColor = nil
                 weekdayLabel.textColor = .secondaryLabel
                 dayLabel.textColor = .label
-
-                if isToday {
-                    // Сегодня, но не выбрано: только синий контур
-                    contentView.layer.borderWidth = 1
-                    contentView.layer.borderColor = UIColor.systemBlue.cgColor
-                } else {
-                    contentView.layer.borderWidth = 0
-                    contentView.layer.borderColor = nil
-                }
             }
         }
     }
 }
+

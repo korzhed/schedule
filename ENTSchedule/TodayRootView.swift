@@ -52,7 +52,7 @@ struct TodayRootView: View {
                 VStack(spacing: 0) {
                     // шапка: фон только под календарём и заголовком дня
                     VStack(spacing: 0) {
-                        DayPickerView(
+                        LegacyDayPickerView(
                             days: daysRange,
                             selectedDate: $selectedDate,
                             hasIntakesForDay: { date in
@@ -66,9 +66,17 @@ struct TodayRootView: View {
 
                         DayHeaderView(date: selectedDate)
                             .padding(.bottom, 4)
+                            .onTapGesture {
+                                let today = Calendar.current.startOfDay(for: Date())
+                                withAnimation(.easeInOut) {
+                                    selectedDate = today
+                                }
+                            }
+
 
                         Divider()
                     }
+
                     .background(Color(.systemBackground)) // убираем серую «полку»
 
                     let intakes = buildIntakes(for: selectedDate)
@@ -201,7 +209,7 @@ struct TodayRootView: View {
 
     // MARK: - Верхний календарь
 
-    private struct DayPickerView: View {
+    private struct LegacyDayPickerView: View {
         let days: [Date]
         @Binding var selectedDate: Date
         let hasIntakesForDay: (Date) -> Bool
@@ -282,16 +290,23 @@ struct TodayRootView: View {
                 return Color(.systemBackground)
             }
         }
-
+        
+        // цвет бордера
         private var borderColor: Color {
-            if isSelected {
-                return .accentColor
-            } else if hasIntakes {
-                return .clear
-            } else {
-                return Color(.systemGray4)
+            switch status {
+            case .completed:
+                return Color.green.opacity(0.2)
+            case .skipped:
+                return Color.orange.opacity(0.2)
+            case .mixed:
+                return Color.yellow.opacity(0.25)
+            case .pending:
+                return hasIntakes ? Color.accentColor.opacity(0.15) : Color(.systemBackground)
+            case .none:
+                return Color(.systemBackground)
             }
         }
+
 
 
         // цвет нижней точки
@@ -318,10 +333,8 @@ struct TodayRootView: View {
 
                 ZStack(alignment: .bottom) {
                     Circle()
-                        .strokeBorder(
-                            hasIntakes ? Color.clear : Color(.systemGray4),
-                            lineWidth: 1
-                        )
+                        .strokeBorder(borderColor, lineWidth: status == .none ? 0 : 1)
+                                
                         .background(
                             Circle().fill(backgroundColor)
                         )
@@ -330,7 +343,6 @@ struct TodayRootView: View {
                             Text(dayNumber)
                                 .font(.subheadline)
                                 .fontWeight(.medium)
-                                .foregroundStyle(isSelected ? .white : .primary)
                         )
 
                     if hasIntakes {
