@@ -322,5 +322,11 @@ final class AppState: ObservableObject {
             print("Failed to load AppState: \(error)")
         }
     }
-}
 
+    // MARK: - Course deletion
+
+    func deleteCourse(withId id: UUID) {
+        courses.removeAll { $0.id == id }
+        save()
+    }
+}

@@ -18,7 +18,16 @@ struct CourseDetailView: View {
             InfoSection(course: course)
             ScheduleSection(course: course)
                 .environmentObject(appState)
-            
+
+            Section {
+                Button(role: .destructive) {
+                    appState.deleteCourse(withId: courseId)
+                } label: {
+                    Text("Удалить назначение")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+
         }
         .navigationTitle(course.name ?? "Детали курса")
         .navigationBarTitleDisplayMode(.inline)

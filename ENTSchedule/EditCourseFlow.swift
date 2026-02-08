@@ -17,10 +17,13 @@ struct EditCourseFlow: View {
     @State private var courseMedicationsState: [CourseMedication]
 
     @State private var slotTimes: [Int: Date] = [:]
+    @State private var originalSlotTimes: [Int: Date] = [:]
 
     @State private var showAddMedication: Bool = false
     @State private var selectedSlotForAdding: Int? = nil
     @State private var showAddFromText: Bool = false
+    @State private var showRedistributeAlert: Bool = false
+    @State private var changedBoundarySlotIndex: Int? = nil
 
     init(course: Course, onComplete: @escaping (Course) -> Void) {
         self.course = course
@@ -118,6 +121,10 @@ struct EditCourseFlow: View {
 
                 // РАСПИСАНИЕ ПРИЁМОВ
                 Section("Расписание приёмов") {
+                    Button("Распределить по дню") {
+                        redistributeAllSlotsBetweenMinAndMax()
+                    }
+
                     ForEach(currentDoseSlots, id: \.indexInDay) { slot in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
@@ -130,7 +137,17 @@ struct EditCourseFlow: View {
                                         get: {
                                             slotTimes[slot.indexInDay] ?? timeFromComponents(slot.time)
                                         },
-                                        set: { slotTimes[slot.indexInDay] = $0 }
+                                        set: { newValue in
+                                            _ = slotTimes[slot.indexInDay] ?? timeFromComponents(slot.time)
+                                            slotTimes[slot.indexInDay] = newValue
+
+                                            let indices = currentDoseSlots.map { $0.indexInDay }.sorted()
+                                            if let first = indices.first, let last = indices.last,
+                                               slot.indexInDay == first || slot.indexInDay == last {
+                                                changedBoundarySlotIndex = slot.indexInDay
+                                                showRedistributeAlert = true
+                                            }
+                                        }
                                     ),
                                     displayedComponents: .hourAndMinute
                                 )
@@ -227,6 +244,46 @@ struct EditCourseFlow: View {
         base.minute = components.minute ?? 0
         return calendar.date(from: base) ?? now
     }
+    
+    // Равномерно распределяем все слоты между минимальным и максимальным временем
+    private func redistributeAllSlotsBetweenMinAndMax() {
+        // Берём индексы всех слотов, которые есть сейчас
+        let indices = currentDoseSlots.map { $0.indexInDay }.sorted()
+        guard indices.count >= 2 else { return }
+
+        let firstIndex = indices.first!
+        let lastIndex = indices.last!
+
+        // Находим исходные слоты по индексам
+        let firstSlot = currentDoseSlots.first(where: { $0.indexInDay == firstIndex })
+        let lastSlot = currentDoseSlots.first(where: { $0.indexInDay == lastIndex })
+
+        // Фактические даты для первого и последнего:
+        // если пользователь уже менял время — берём из slotTimes,
+        // иначе используем время из DoseSlot.time (по умолчанию)
+        let firstDate = slotTimes[firstIndex]
+            ?? timeFromComponents(firstSlot?.time ?? DateComponents(hour: 8, minute: 0))
+
+        let lastDate = slotTimes[lastIndex]
+            ?? timeFromComponents(lastSlot?.time ?? DateComponents(hour: 20, minute: 0))
+
+        let totalInterval = lastDate.timeIntervalSince(firstDate)
+        guard totalInterval > 0 else { return }
+
+        let step = totalInterval / Double(indices.count - 1)
+
+        for (offset, index) in indices.enumerated() {
+            if index == firstIndex {
+                slotTimes[index] = firstDate
+            } else if index == lastIndex {
+                slotTimes[index] = lastDate
+            } else {
+                let date = firstDate.addingTimeInterval(step * Double(offset))
+                slotTimes[index] = date
+            }
+        }
+    }
+
 
     private func getMedications(for slotIndex: Int) -> [MedicationItem] {
         let medIds = courseMedicationsState
@@ -398,20 +455,30 @@ struct EditCourseFlow: View {
 
         // Пересчитываем слоты по максимальному timesPerDay
         let maxTimesPerDay = medications.map { $0.timesPerDay }.max() ?? 0
-        let newSlots = (1...maxTimesPerDay).map { i -> DoseSlot in
-            if let t = slotTimes[i] {
-                return DoseSlot(
-                    id: UUID(),
-                    indexInDay: i,
-                    time: Calendar.current.dateComponents([.hour, .minute], from: t)
-                )
-            } else if let original = course.doseSlots.first(where: { $0.indexInDay == i }) {
-                return original
-            } else {
-                let hour = 9 + (i - 1)
-                let comps = DateComponents(hour: hour, minute: 0)
-                return DoseSlot(id: UUID(), indexInDay: i, time: comps)
+
+        // Гарантируем, что для всех индексов 1...maxTimesPerDay есть время в slotTimes
+        // Если времени нет, равномерно распределяем приёмы между 8:00 и 20:00
+        if maxTimesPerDay > 0 {
+            let calendar = Calendar.current
+            let base = calendar.startOfDay(for: Date())
+
+            let startHour = 8.0
+            let endHour = 20.0
+            let slotsCount = Double(maxTimesPerDay)
+            let step = (endHour - startHour) / max(1.0, slotsCount - 1.0)
+
+            for i in 1...maxTimesPerDay {
+                if slotTimes[i] == nil {
+                    let hour = Int(round(startHour + Double(i - 1) * step))
+                    slotTimes[i] = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: base) ?? base
+                }
             }
+        }
+
+        let newSlots: [DoseSlot] = (1...maxTimesPerDay).map { i in
+            let t = slotTimes[i] ?? Date()
+            let comps = Calendar.current.dateComponents([.hour, .minute], from: t)
+            return DoseSlot(id: UUID(), indexInDay: i, time: comps)
         }
         updated.doseSlots = newSlots
 

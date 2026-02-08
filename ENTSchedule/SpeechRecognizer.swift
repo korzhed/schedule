@@ -8,6 +8,8 @@ final class SpeechRecognizer: NSObject, ObservableObject {
     @Published var transcribedText: String = ""
     @Published var isRecording: Bool = false
 
+    var onUpdate: ((String) -> Void)?
+
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ru-RU"))
     private let audioEngine = AVAudioEngine()
 
@@ -70,10 +72,9 @@ final class SpeechRecognizer: NSObject, ObservableObject {
 
             if let result = result {
                 DispatchQueue.main.async {
-                    // Здесь всегда храним ТЕКУЩУЮ диктовку целиком.
-                    // Уже «накопленный» текст добавляй во вью:
-                    // rawText += speechRecognizer.transcribedText
-                    self.transcribedText = result.bestTranscription.formattedString
+                    let text = result.bestTranscription.formattedString
+                    self.transcribedText = text
+                    self.onUpdate?(text)
                 }
             }
 

@@ -181,8 +181,8 @@ struct ScheduleStepView: View {
             if workingMedications.isEmpty {
                 workingMedications = parsedMedications
 
-                // простая эвристика: если есть лекарства с >4 приёмами, считаем курс интервальным
-                isIntervalBased = workingMedications.contains { $0.timesPerDay > 4 }
+                // простая эвристика: если есть лекарства с очень частым приёмом (>6 раз), считаем курс интервальным
+                isIntervalBased = workingMedications.contains { $0.timesPerDay > 6 }
 
                 initDefaultState()
             }
@@ -205,6 +205,8 @@ struct ScheduleStepView: View {
                 }
             )
         }
+        
+        
         .alert(
             "Выровнять промежутки времени?",
             isPresented: $showAlignAlert
@@ -313,15 +315,53 @@ struct ScheduleStepView: View {
 
         if slotMedications.isEmpty {
             slotMedications = [:]
+
+            let totalSlots = maxSlots
+            guard totalSlots > 0 else { return }
+
+            // заранее заполняем пустые множества для всех слотов
+            for slotIndex in 1...totalSlots {
+                slotMedications[slotIndex] = []
+            }
+
             for medication in workingMedications {
-                for slotIndex in 1...min(medication.timesPerDay, maxSlots) {
-                    if slotMedications[slotIndex] == nil {
-                        slotMedications[slotIndex] = []
+                let times = max(1, medication.timesPerDay)
+
+                var targetSlots: [Int] = []
+
+                if times >= totalSlots {
+                    // Больше или равно количеству слотов — ставим в каждый слот
+                    targetSlots = Array(1...totalSlots)
+                } else if times == 1 {
+                    // Один приём — середина по индексам
+                    let middlePos = Double(totalSlots - 1) / 2.0
+                    let middleIndex = 1 + Int(round(middlePos))
+                    targetSlots = [middleIndex]
+                } else if times == 2 {
+                    // Два приёма — первый и последний слот
+                    let firstIndex = 1
+                    let lastIndex = totalSlots
+                    targetSlots = [firstIndex, lastIndex]
+                } else {
+                    // 1 < times < totalSlots -> равномерное распределение по индексам
+                    // позиции от 0 до totalSlots-1
+                    var chosen: [Int] = []
+                    for i in 0..<times {
+                        let pos = Double(i) * Double(totalSlots - 1) / Double(times - 1)
+                        let roundedPos = Int(round(pos))
+                        let slotIndex = 1 + min(totalSlots - 1, max(0, roundedPos))
+                        chosen.append(slotIndex)
                     }
+                    // убираем дубли и сортируем
+                    targetSlots = Array(Set(chosen)).sorted()
+                }
+
+                for slotIndex in targetSlots {
                     slotMedications[slotIndex]?.insert(medication.id)
                 }
             }
         }
+
     }
 
     /// Для интервалов ("каждые N часов"): расставляем приёмы начиная с 8:00 по приблизительному шагу (24 / maxSlots), без ограничения 20:00.

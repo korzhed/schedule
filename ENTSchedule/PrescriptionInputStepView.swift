@@ -16,93 +16,64 @@ struct PrescriptionInputStepView: View {
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var hasSpeechPermission: Bool = true
 
-    /// Последняя партия лекарств из диктовки — на будущее
-    @State private var lastBatch: [MedicationItem] = []
+    /// Состояния диктовки
+    @State private var isRecordingFromMic: Bool = false
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: 8) {
 
-                // Текст назначения
-                VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
                     Text("Текст назначения")
-                        .font(.subheadline)
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
 
-                    ZStack(alignment: .topLeading) {
-                        if prescriptionText.isEmpty {
-                            Text("Вставьте текст назначения от врача…")
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 12)
-                                .padding(.leading, 12)
+                    Spacer()
+
+                    if speechRecognizer.isRecording {
+                        Label("Слушаю…", systemImage: "waveform")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.blue)
+                    }
+                }
+
+                ZStack(alignment: .topLeading) {
+                    if prescriptionText.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Продиктуйте или вставьте текст назначения…")
+                            Text("Нажмите микрофон, надиктуйте и подтвердите галочкой")
+                                .font(.footnote)
                         }
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 12)
+                        .padding(.leading, 12)
+                    }
 
-                        // TextEditor + микрофон в правом нижнем углу
-                        ZStack(alignment: .bottomTrailing) {
-                            TextEditor(text: $prescriptionText)
-                                .frame(minHeight: 180)
-                                .scrollContentBackground(.hidden)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 8)
+                    // TextEditor + микрофон в углу
+                    ZStack(alignment: .bottomTrailing) {
+                        TextEditor(text: $prescriptionText)
+                            .frame(minHeight: 180)
+                            .scrollContentBackground(.hidden)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
+                            .contentShape(Rectangle())
 
-                            Button(action: {
-                                toggleRecording()
-                            }) {
-                                Image(systemName: speechRecognizer.isRecording ? "mic.fill" : "mic")
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundStyle(speechRecognizer.isRecording ? Color.red : Color.blue)
-                                    .shadow(color: Color.black.opacity(0.4), radius: 3, x: 0, y: 2)
-                            }
+                        micButton
                             .padding(.trailing, 8)
                             .padding(.bottom, 8)
-                        }
-                        .background(Color(.systemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color(.separator), lineWidth: 1)
-                        )
-
-                        if speechRecognizer.isRecording {
-                            Text("Слушаю…")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 8)
-                                .padding(.leading, 12)
-                        }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color(.separator), lineWidth: 1)
+                    )
                 }
 
-                // Результат диктовки + кнопка вставки
-                if !speechRecognizer.transcribedText.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Результат диктовки")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Text(speechRecognizer.transcribedText)
-                            .font(.footnote)
-                            .foregroundStyle(.primary)
-                            .padding(8)
-                            .background(Color(.secondarySystemBackground))
-                            .clipShape(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            )
-
-                        Button(action: {
-                            appendDictationToPrescription()
-                        }) {
-                            Label("Вставить текст назначения", systemImage: "arrow.down.doc")
-                                .font(.subheadline)
-                        }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.regular)
-                        .padding(.top, 4)
-                    }
-                    .padding(.horizontal, 4)
-                }
 
                 // Распознанные лекарства
                 if !parsedMedications.isEmpty {
@@ -114,11 +85,11 @@ struct PrescriptionInputStepView: View {
                         VStack(spacing: 12) {
                             ForEach(parsedMedications) { med in
                                 HStack(alignment: .top, spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 6) {
+                                    VStack(alignment: .leading, spacing: 12) {
                                         Text(med.name)
                                             .font(.headline)
 
-                                        HStack(spacing: 8) {
+                                        HStack(spacing: 16) {
                                             Label(med.dosage, systemImage: "scalemass")
                                             Label("\(med.timesPerDay) раз/день", systemImage: "clock")
                                             Label("\(med.durationInDays) дней", systemImage: "calendar")
@@ -168,8 +139,19 @@ struct PrescriptionInputStepView: View {
             .padding(.bottom, 32)
         }
         .background(Color(.systemGroupedBackground))
+        .onTapGesture {
+                hideKeyboard()
+            }
         .navigationTitle("Новое назначение")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Далее") {
+                    onNext(parsedMedications)
+                }
+                .disabled(parsedMedications.isEmpty)
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             bottomBar
         }
@@ -180,15 +162,89 @@ struct PrescriptionInputStepView: View {
         }
     }
 
+    // MARK: - Voice UI
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil,
+                                        from: nil,
+                                        for: nil)
+    }
+    
+    private var micButton: some View {
+        let isRecording = isRecordingFromMic
+
+        let iconName = isRecording ? "checkmark" : "mic.fill"
+        let iconColor: Color = isRecording ? .green : .blue
+        let circleFill: AnyShapeStyle = isRecording
+            ? AnyShapeStyle(Color.green.opacity(0.25))
+            : AnyShapeStyle(.ultraThinMaterial)
+        let shadowColor: Color = isRecording ? .green : .blue
+
+        return Image(systemName: iconName)
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(iconColor)
+            .padding(14)
+            .background(
+                Circle()
+                    .fill(circleFill)
+            )
+            .shadow(color: shadowColor.opacity(0.25), radius: 4, x: 0, y: 2)
+            .contentShape(Circle())
+            .onTapGesture {
+                if isRecordingFromMic {
+                    stopAndParseDictation()
+                } else {
+                    hideKeyboard()
+                    startDictation()
+                }
+            }
+    }
+
+
+
+
+    private func startDictation() {
+        isRecordingFromMic = true
+        prescriptionText = ""
+        speechRecognizer.transcribedText = ""
+
+        speechRecognizer.requestAuthorization { granted in
+            if granted {
+                speechRecognizer.start()
+                speechRecognizer.onUpdate = { newText in
+                    let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    prescriptionText = trimmed
+                }
+            } else {
+                hasSpeechPermission = false
+                errorMessage = "Нет доступа к распознаванию речи. Проверьте настройки приватности."
+                showError = true
+                isRecordingFromMic = false
+            }
+        }
+    }
+
+    private func stopAndParseDictation() {
+        isRecordingFromMic = false
+        speechRecognizer.stop()
+
+        let trimmed = prescriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        parsePrescription()
+        prescriptionText = ""
+    }
+
+    private func clearInput() {
+        prescriptionText = ""
+        speechRecognizer.transcribedText = ""
+    }
+
     // MARK: - Bottom bar
 
     private var bottomBar: some View {
         VStack(spacing: 8) {
-            // более мягкий разделитель, чтобы в тёмной теме не было жёсткой полосы
-            Divider()
-                .overlay(Color(.separator).opacity(0.4))
-                .padding(.horizontal, 16)
-
             HStack(spacing: 12) {
                 if !prescriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button {
@@ -200,27 +256,13 @@ struct PrescriptionInputStepView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                     .buttonBorderShape(.roundedRectangle(radius: 12))
                     .controlSize(.large)
                 }
-
-                Button {
-                    onNext(parsedMedications)
-                } label: {
-                    Text("Далее")
-                        .frame(maxWidth: .infinity)
-                        .fontWeight(.semibold)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: 12))
-                .controlSize(.large)
-                .disabled(parsedMedications.isEmpty)
-                .opacity(parsedMedications.isEmpty ? 0.5 : 1)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            // вместо серой «полосы» — фон, совпадающий с основным
+            .padding(.vertical, 8)
             .background(Color(.systemGroupedBackground))
         }
     }
@@ -238,48 +280,8 @@ struct PrescriptionInputStepView: View {
             errorMessage = "Не удалось распознать лекарства. Проверьте текст назначения."
             showError = true
         } else {
-            lastBatch = medications
             parsedMedications.append(contentsOf: medications)
         }
-    }
-
-    // MARK: - Voice control
-
-    private func toggleRecording() {
-        if speechRecognizer.isRecording {
-            speechRecognizer.stop()
-        } else {
-            speechRecognizer.requestAuthorization { granted in
-                if granted {
-                    speechRecognizer.start()
-                } else {
-                    hasSpeechPermission = false
-                    errorMessage = "Нет доступа к распознаванию речи. Проверьте настройки приватности."
-                    showError = true
-                }
-            }
-        }
-    }
-
-    /// Вставляем результат текущей диктовки в основной текст,
-    /// останавливаем диктовку, очищаем «результат диктовки» и сразу распознаём
-    private func appendDictationToPrescription() {
-        if speechRecognizer.isRecording {
-            speechRecognizer.stop()
-        }
-
-        let newPart = speechRecognizer.transcribedText
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !newPart.isEmpty else { return }
-
-        if prescriptionText.isEmpty {
-            prescriptionText = newPart
-        } else {
-            prescriptionText += "\n" + newPart
-        }
-
-        speechRecognizer.transcribedText = ""
-        parsePrescription()
     }
 
     private func deleteMedication(_ med: MedicationItem) {
