@@ -166,7 +166,7 @@ struct CourseRowView: View {
                     }
                 }
             }
-            .frame(width: 8)
+            .frame(width: 4)
         }
         .padding(14)
         .background(
