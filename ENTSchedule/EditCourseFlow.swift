@@ -194,7 +194,6 @@ struct EditCourseFlow: View {
                     }
                 }
             }
-
             .navigationTitle("Редактирование курса")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -209,6 +208,17 @@ struct EditCourseFlow: View {
                         onComplete(updated)
                         dismiss()
                     }
+                }
+            }
+            .alert("Выровнять промежутки времени?", isPresented: $showRedistributeAlert) {
+                Button("Отмена", role: .cancel) {
+                    showRedistributeAlert = false
+                    changedBoundarySlotIndex = nil
+                }
+                Button("Выровнять") {
+                    redistributeAllSlotsBetweenMinAndMax()
+                    showRedistributeAlert = false
+                    changedBoundarySlotIndex = nil
                 }
             }
             .sheet(isPresented: $showAddMedication) {

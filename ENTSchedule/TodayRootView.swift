@@ -237,6 +237,7 @@ struct TodayRootView: View {
                         }
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 16)
                     .padding(.bottom, 8)
                 }
                 .onAppear {
@@ -326,34 +327,35 @@ struct TodayRootView: View {
         }
 
         var body: some View {
-            VStack(spacing: 4) {
-                Text(weekdayLetter)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            ZStack {
+                if isSelected {
+                    Capsule(style: .continuous)
+                        .stroke(Color.accentColor, lineWidth: 2)
+                }
 
-                ZStack(alignment: .bottom) {
-                    Circle()
-                        .strokeBorder(borderColor, lineWidth: status == .none ? 0 : 1)
-                                
-                        .background(
-                            Circle().fill(backgroundColor)
-                        )
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text(dayNumber)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        )
+                VStack(spacing: 1) {
+                    Text(weekdayLetter)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+
+                    Text(dayNumber)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                        .fixedSize()
 
                     if hasIntakes {
                         Circle()
                             .fill(dotColor)
                             .frame(width: 6, height: 6)
-                            .offset(y: 4)
                     }
                 }
-
+                .padding(12)
+                .fixedSize()
             }
+            .frame(height: 48)
+            .contentShape(Capsule(style: .continuous))
         }
     }
 
@@ -400,3 +402,4 @@ struct TodayRootView: View {
         }
     }
 }
+
