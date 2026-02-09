@@ -573,6 +573,11 @@ struct PrescriptionParser {
     private func extractComment(from text: String) -> String? {
         var comment: String? = nil
 
+        // Избегаем шумных комментариев на слишком коротких строках
+        if text.count < 8 {
+            return nil
+        }
+
         func add(_ note: String) {
             if comment == nil {
                 comment = note
@@ -609,25 +614,6 @@ struct PrescriptionParser {
             if lower.contains(substr) {
                 add(note)
             }
-        }
-
-        // Добавляем нераспознанные части строки в комментарий для информативности
-        // Комментарий: это поможет пользователю видеть, что еще содержится в назначении
-        let knownWords = Set((commentPatterns.map { $0.substr } + ["через день", "по необходимости", "по требованию", "потом"]).flatMap { $0.components(separatedBy: .whitespaces) }).map { $0.lowercased() }
-        let tokens = lower.components(separatedBy: .whitespaces)
-        let unrecognizedWords = tokens.filter { word in
-            let clean = word.trimmingCharacters(in: .punctuationCharacters)
-            guard !clean.isEmpty else { return false }
-            if knownWords.contains(clean) { return false }
-            if Int(clean) != nil { return false }
-            if textNumberWords[clean] != nil { return false }
-            if clean.contains("дн") || clean.contains("недел") || clean.contains("мес") || clean.contains("час") || clean.contains("раз") { return false }
-            if clean.contains("капл") || clean.contains("табл") || clean.contains("доз") || clean.contains("мг") || clean.contains("г") || clean.contains("мл") { return false }
-            return true
-        }
-        if !unrecognizedWords.isEmpty {
-            let extra = unrecognizedWords.joined(separator: " ")
-            add("Доп. информация: " + extra)
         }
 
         return comment
@@ -1108,5 +1094,4 @@ struct PrescriptionParser {
 //     let durationInDays: Int
 //     let comment: String?
 // }
-
 
