@@ -161,6 +161,10 @@ struct SettingsView: View {
         appState.courses = []
         appState.medications = []
         appState.intakeStatuses = [:]
+
+        // Удаляем все запланированные уведомления
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     }
 
     private func refreshNotificationStatus() {

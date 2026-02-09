@@ -36,6 +36,21 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("All pending notifications cleared")
     }
 
+    /// Отменить все уведомления для конкретного courseId
+    func cancelNotifications(forCourseId id: UUID) {
+        let center = UNUserNotificationCenter.current()
+        let prefix = "course-\(id.uuidString)-"
+        center.getPendingNotificationRequests { existing in
+            let toRemove = existing
+                .filter { $0.identifier.hasPrefix(prefix) }
+                .map { $0.identifier }
+            if !toRemove.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: toRemove)
+                print("Cancelled \(toRemove.count) notifications for course \(id)")
+            }
+        }
+    }
+
     /// Пересоздать уведомления для конкретного курса:
     /// 1) удалить все pending c префиксом course-{id}
     /// 2) заново вызвать scheduleNotifications(for:)
@@ -194,3 +209,4 @@ struct ENTScheduleApp: App {
         }
     }
 }
+

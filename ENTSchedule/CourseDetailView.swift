@@ -3,7 +3,9 @@ import SwiftUI
 struct CourseDetailView: View {
 
     @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
     @State private var showEditSheet: Bool = false
+    @State private var showDeleteAlert: Bool = false
 
     let courseId: UUID
 
@@ -21,7 +23,7 @@ struct CourseDetailView: View {
 
             Section {
                 Button(role: .destructive) {
-                    appState.deleteCourse(withId: courseId)
+                    showDeleteAlert = true
                 } label: {
                     Text("Удалить назначение")
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -46,6 +48,15 @@ struct CourseDetailView: View {
                 showEditSheet = false
             }
             .environmentObject(appState)
+        }
+        .alert("Удалить назначение?", isPresented: $showDeleteAlert) {
+            Button("Отмена", role: .cancel) { }
+            Button("Удалить", role: .destructive) {
+                appState.deleteCourse(withId: courseId)
+                dismiss()
+            }
+        } message: {
+            Text("Это действие нельзя отменить. Все данные по этому назначению будут удалены.")
         }
 
     }

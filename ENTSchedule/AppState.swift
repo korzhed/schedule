@@ -119,9 +119,17 @@ final class AppState: ObservableObject {
 
     func updateCourse(_ updated: Course) {
         if let index = courses.firstIndex(where: { $0.id == updated.id }) {
+            let previous = courses[index]
             courses[index] = updated
             save()
-            notificationService?.rescheduleNotifications(for: updated)
+
+            if updated.remindersEnabled == false {
+                // Если уведомления выключены для курса — снимаем все запланированные уведомления
+                notificationService?.cancelNotifications(forCourseId: updated.id)
+            } else {
+                // Иначе перепланируем (удалит старые этого курса и создаст заново при необходимости)
+                notificationService?.rescheduleNotifications(for: updated)
+            }
         }
     }
 
@@ -328,5 +336,7 @@ final class AppState: ObservableObject {
     func deleteCourse(withId id: UUID) {
         courses.removeAll { $0.id == id }
         save()
+        // Отменяем все уведомления для этого курса
+        notificationService?.cancelNotifications(forCourseId: id)
     }
 }
