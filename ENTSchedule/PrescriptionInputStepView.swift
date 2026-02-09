@@ -171,25 +171,32 @@ struct PrescriptionInputStepView: View {
                                         for: nil)
     }
     
+    @ViewBuilder
     private var micButton: some View {
         let isRecording = isRecordingFromMic
 
         let iconName = isRecording ? "checkmark" : "mic.fill"
-        let iconColor: Color = isRecording ? .green : .blue
-        let circleFill: AnyShapeStyle = isRecording
-            ? AnyShapeStyle(Color.green.opacity(0.25))
-            : AnyShapeStyle(.ultraThinMaterial)
-        let shadowColor: Color = isRecording ? .green : .blue
+        let baseColor: Color = isRecording ? .green : .blue
 
-        return Image(systemName: iconName)
-            .font(.system(size: 24, weight: .semibold))
-            .foregroundStyle(iconColor)
-            .padding(14)
+        Image(systemName: iconName)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.white) // ← иконка всегда белая
+            .padding(12)
             .background(
-                Circle()
-                    .fill(circleFill)
+                Circle().fill(.clear)
             )
-            .shadow(color: shadowColor.opacity(0.25), radius: 4, x: 0, y: 2)
+            .glassEffect(
+                .regular
+                    .tint(baseColor.opacity(0.9)) // цвет стекла
+                    .interactive()
+            )
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .strokeBorder(.white.opacity(0.35), lineWidth: 1)
+                    .blendMode(.screen)
+            )
+            .shadow(color: baseColor.opacity(0.35), radius: 10)
             .contentShape(Circle())
             .onTapGesture {
                 if isRecordingFromMic {
@@ -200,6 +207,8 @@ struct PrescriptionInputStepView: View {
                 }
             }
     }
+
+
 
 
 
