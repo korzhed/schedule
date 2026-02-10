@@ -238,7 +238,7 @@ struct TodayRootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 12)
                 }
                 .onAppear {
                     let today = Calendar.current.startOfDay(for: selectedDate)

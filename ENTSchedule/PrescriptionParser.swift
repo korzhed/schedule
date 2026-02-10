@@ -421,7 +421,8 @@ struct PrescriptionParser {
             "месяц", "месяца", "месяцев", "мес",
             "час", "часов",
             "доза", "дозы",
-            "пшик", "впрыск", "капсул", "капсула", "капсулы"
+            "пшик", "впрыск", "капсул", "капсула", "капсулы",
+            "подряд"
         ]
         for word in stopWords {
             parameterWords.insert(word)
@@ -623,6 +624,60 @@ struct PrescriptionParser {
 
     /// Улучшенное извлечение дозировки с поддержкой чисел без пробелов, дробных значений и текстовых числительных
     private func extractDosage(from text: String) -> String? {
+        // Добавляем новые паттерны для распознавания дозировки в форме "пять капель", "5 капель" и др. без обязательного "по"
+        // Обеспечиваем поиск первого вхождения в тексте (выбираем левый по позиции)
+        let extendedPatterns = [
+            #"(?:по\s*)?(\d+|[а-яё]+)\s*капл[иья]"#,
+            #"(\d+|[а-яё]+)\s*доз[аы]"#,
+            #"(\d+|[а-яё]+)\s*табл[еа-яё]*"#,
+            #"(\d+|[а-яё]+)\s*капсул[аы]?"#,
+            #"(\d+|[а-яё]+)\s*(пшик[аов]?|впрыск[аов]?)"#
+        ]
+
+        var earliestMatch: (range: NSRange, number: Int, unit: String)? = nil
+
+        for pattern in extendedPatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+                continue
+            }
+
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = regex.matches(in: text, range: range)
+            for match in matches {
+                if match.numberOfRanges >= 2,
+                   let numberRange = Range(match.range(at: 1), in: text),
+                   let fullRange = Range(match.range(at: 0), in: text) {
+                    let numberStr = String(text[numberRange]).lowercased()
+                    var number: Int? = nil
+                    if let n = Int(numberStr) {
+                        number = n
+                    } else if let nWord = textNumberWords[numberStr] {
+                        number = nWord
+                    }
+                    if number == nil {
+                        continue
+                    }
+                    let fullMatch = String(text[fullRange])
+                    // Remove the number string from fullMatch (first occurrence)
+                    var unitRaw = fullMatch
+                    if let rangeToRemove = unitRaw.range(of: numberStr) {
+                        unitRaw.removeSubrange(rangeToRemove)
+                    }
+                    unitRaw = unitRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if unitRaw.isEmpty {
+                        unitRaw = fullMatch.replacingOccurrences(of: numberStr, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    let unit = normalizeUnit(unitRaw)
+                    if earliestMatch == nil || match.range.location < earliestMatch!.range.location {
+                        earliestMatch = (match.range, number!, unit)
+                    }
+                }
+            }
+        }
+        if let match = earliestMatch {
+            return "\(match.number) \(match.unit)"
+        }
+
         // Паттерны для дозировки с пробелами, например "5 капл", "2 дозы"
         let numericPatterns = [
             #"(?:по\s*)?(\d+)\s*(капл[иья]|кап\.?)"#,
@@ -633,21 +688,30 @@ struct PrescriptionParser {
             #"(?:по\s*)?(\d+)\s*(пшик[aов]?|впрыск[аов]?)"#
         ]
 
-        for pattern in numericPatterns {
-            if let full = firstMatch(pattern: pattern, in: text, group: 0) {
-                let parts = full
-                    .trimmingCharacters(in: .whitespaces)
-                    .components(separatedBy: .whitespaces)
-                    .filter { !$0.isEmpty }
+        // Найдем первый матч по позиции
+        var earliestNumericMatch: (range: NSRange, amount: Int, unit: String)? = nil
 
-                if parts.count >= 2,
-                   let amount = Int(parts[0]) {
-                    let rawUnit = parts[1]
-                    let unit = normalizeUnit(rawUnit)
-                    return "\(amount) \(unit)"
+        for pattern in numericPatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { continue }
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = regex.matches(in: text, range: range)
+            for match in matches {
+                if match.numberOfRanges >= 3,
+                   let amountRange = Range(match.range(at: 1), in: text),
+                   let unitRange = Range(match.range(at: 2), in: text) {
+                    let amountStr = String(text[amountRange])
+                    let rawUnit = String(text[unitRange])
+                    if let amount = Int(amountStr) {
+                        let unit = normalizeUnit(rawUnit)
+                        if earliestNumericMatch == nil || match.range.location < earliestNumericMatch!.range.location {
+                            earliestNumericMatch = (match.range, amount, unit)
+                        }
+                    }
                 }
-                return full.trimmingCharacters(in: .whitespaces)
             }
+        }
+        if let match = earliestNumericMatch {
+            return "\(match.amount) \(match.unit)"
         }
 
         // Распознаём дозировку с дробными значениями и писаной без пробелов: "500мг", "0.5 г", "5мг/кг", "10мл"

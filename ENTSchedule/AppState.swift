@@ -36,6 +36,15 @@ struct Course: Identifiable, Hashable, Codable {
     var reminderOffsetMinutes: Int
     /// Общая длительность курса в днях
     var totalDurationInDays: Int
+
+    var isFinished: Bool {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        guard totalDurationInDays > 0 else { return false }
+        guard let end = calendar.date(byAdding: .day, value: totalDurationInDays, to: start) else { return false }
+        let today = calendar.startOfDay(for: Date())
+        return today >= end
+    }
 }
 
 // MARK: - Intake status
@@ -101,6 +110,7 @@ final class AppState: ObservableObject {
 
     init() {
         load()
+        cleanupNotificationsForFinishedCourses()
     }
 
     // MARK: - Notifications hook
@@ -108,25 +118,37 @@ final class AppState: ObservableObject {
     func attachNotificationService(_ service: NotificationService) {
         self.notificationService = service
     }
+    
+    private func cleanupNotificationsForFinishedCourses() {
+        guard let notificationService else { return }
+        for course in courses {
+            if course.isFinished {
+                notificationService.cancelNotifications(forCourseId: course.id)
+            }
+        }
+    }
 
     // MARK: - Courses
 
     func addCourse(_ course: Course) {
         courses.append(course)
         save()
-        notificationService?.scheduleNotifications(for: course)
+        cleanupNotificationsForFinishedCourses()
+        if !course.isFinished && course.remindersEnabled {
+            notificationService?.scheduleNotifications(for: course)
+        }
     }
 
     func updateCourse(_ updated: Course) {
         if let index = courses.firstIndex(where: { $0.id == updated.id }) {
-            let previous = courses[index]
             courses[index] = updated
             save()
+            cleanupNotificationsForFinishedCourses()
 
             if updated.remindersEnabled == false {
                 // Если уведомления выключены для курса — снимаем все запланированные уведомления
                 notificationService?.cancelNotifications(forCourseId: updated.id)
-            } else {
+            } else if !updated.isFinished {
                 // Иначе перепланируем (удалит старые этого курса и создаст заново при необходимости)
                 notificationService?.rescheduleNotifications(for: updated)
             }
@@ -336,7 +358,9 @@ final class AppState: ObservableObject {
     func deleteCourse(withId id: UUID) {
         courses.removeAll { $0.id == id }
         save()
+        cleanupNotificationsForFinishedCourses()
         // Отменяем все уведомления для этого курса
         notificationService?.cancelNotifications(forCourseId: id)
     }
 }
+
